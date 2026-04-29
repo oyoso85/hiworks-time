@@ -5,8 +5,9 @@ __pycache__/
 venv/
 dist/
 build/
-*.spec
 *.egg-info/
 .idea/
 .vscode/
 *.log
+# 빌드 결과물 (build.bat 실행 후 생성)
+hiworks-time.exe

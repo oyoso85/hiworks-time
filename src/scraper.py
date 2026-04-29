@@ -78,13 +78,24 @@ class ScraperThread(QThread):
 
     async def _scrape(self) -> str:
         async with async_playwright() as p:
-            browser = await p.chromium.launch(headless=True)
+            browser = await self._launch_browser(p)
             page = await browser.new_page()
             try:
                 await self._login(page)
                 return await self._get_clock_in(page)
             finally:
                 await browser.close()
+
+    @staticmethod
+    async def _launch_browser(p):
+        # Windows 10/11에 기본 설치된 Edge 우선 사용 → Chrome → 내장 Chromium
+        for channel in ("msedge", "chrome"):
+            try:
+                return await p.chromium.launch(channel=channel, headless=True)
+            except Exception:
+                continue
+        # 개발 환경 fallback: playwright install chromium 이 된 경우만 동작
+        return await p.chromium.launch(headless=True)
 
     async def _login(self, page):
         await page.goto(LOGIN_URL, timeout=30_000)
