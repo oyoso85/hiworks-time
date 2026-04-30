@@ -19,7 +19,7 @@ CONFIG_DIR = Path(os.environ.get("APPDATA", ".")) / "HiworksTimeWidget"
 CONFIG_FILE = CONFIG_DIR / "config.json"
 
 W, H = 118, 56                          # 위젯 크기 (바탕화면 아이콘 수준)
-REFRESH_INTERVAL_MS = 60 * 60 * 1000   # 1시간마다 자동 갱신
+REFRESH_INTERVAL_MS = 60 * 60 * 1000   # 1시간마다 hiworks 재조회
 
 
 class DesktopWidget(QWidget):
@@ -34,6 +34,7 @@ class DesktopWidget(QWidget):
         self._init_window()
         self._restore_position()
         self._start_auto_refresh()
+        self._start_minute_tick()
         QTimer.singleShot(300, self._on_startup)
 
     # ── 초기화 ────────────────────────────────────────────────────────────────
@@ -82,6 +83,11 @@ class DesktopWidget(QWidget):
         t.timeout.connect(self._refresh)
         t.start(REFRESH_INTERVAL_MS)
 
+    def _start_minute_tick(self):
+        t = QTimer(self)
+        t.timeout.connect(self.update)  # 1분마다 repaint → 남은 시간 갱신
+        t.start(60_000)
+
     def _refresh(self):
         creds = credentials.load()
         if creds:
@@ -104,7 +110,7 @@ class DesktopWidget(QWidget):
         elif self._status == "error":
             self._draw_error(p)
         elif self._status == "ok" and self._clock_in:
-            self._draw_times(p, self._clock_in, self._clock_out())
+            self._draw_times(p, self._clock_in, self._remaining())
 
     def _draw_bg(self, p: QPainter):
         path = QPainterPath()
@@ -112,6 +118,10 @@ class DesktopWidget(QWidget):
         p.fillPath(path, QColor(0, 0, 0, 26))  # 검정 10% (255 * 0.1 ≈ 26)
 
     def _draw_times(self, p: QPainter, line1: str, line2: str):
+        # 퇴근 가능 여부에 따라 두 번째 줄 색상 결정
+        can_leave = self._can_leave()
+        color2 = QColor(100, 255, 120) if can_leave else QColor(80, 210, 255)
+
         font = QFont("Segoe UI", 13, QFont.Bold)
         p.setFont(font)
         fm = QFontMetrics(font)
@@ -121,17 +131,15 @@ class DesktopWidget(QWidget):
         base_y = (H - total) // 2 + fm.ascent()
 
         rows = [
-            (line1, QColor(255, 220, 80)),    # 출근 — 노란색
-            (line2, QColor(80, 210, 255)),    # 퇴근 — 하늘색
+            (line1, QColor(255, 220, 80)),  # 출근 — 노란색
+            (line2, color2),                # 남은 시간 — 하늘색 / 퇴근 가능 — 초록색
         ]
         for i, (text, color) in enumerate(rows):
             tw = fm.horizontalAdvance(text)
             x = (W - tw) // 2
             y = base_y + i * (lh + gap)
-            # 그림자
             p.setPen(QColor(0, 0, 0, 160))
             p.drawText(x + 1, y + 1, text)
-            # 본문
             p.setPen(color)
             p.drawText(x, y, text)
 
@@ -200,12 +208,30 @@ class DesktopWidget(QWidget):
 
     # ── 유틸 ─────────────────────────────────────────────────────────────────
 
-    def _clock_out(self) -> str:
+    def _clock_out_dt(self) -> datetime | None:
         try:
-            t = datetime.strptime(self._clock_in, "%H:%M")
-            return (t + timedelta(hours=9)).strftime("%H:%M")
+            base = datetime.strptime(self._clock_in, "%H:%M")
+            today = datetime.now().replace(second=0, microsecond=0)
+            return today.replace(hour=base.hour, minute=base.minute) + timedelta(hours=9)
         except Exception:
+            return None
+
+    def _can_leave(self) -> bool:
+        dt = self._clock_out_dt()
+        return dt is not None and datetime.now() >= dt
+
+    def _remaining(self) -> str:
+        dt = self._clock_out_dt()
+        if dt is None:
             return "?:??"
+        delta = dt - datetime.now()
+        total_min = int(delta.total_seconds() // 60)
+        if total_min <= 0:
+            return "퇴근 가능"
+        h, m = divmod(total_min, 60)
+        if h > 0:
+            return f"{h}h {m:02d}m"
+        return f"{m}m"
 
     def _open_login(self):
         dlg = LoginDialog(self)
