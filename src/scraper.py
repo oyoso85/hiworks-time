@@ -85,7 +85,8 @@ class ScraperThread(QThread):
 
     async def _login(self, page):
         await page.goto(LOGIN_URL, timeout=30_000)
-        await page.wait_for_load_state("networkidle", timeout=20_000)
+        # networkidle 대신 아이디 입력 필드가 보이는 즉시 진행
+        await page.wait_for_selector('input[placeholder*="ID"]', timeout=10_000)
 
         # 페이지가 @axgate.com 을 자동으로 붙여주므로 도메인 부분 제거
         login_id = self.username.split("@")[0]
@@ -143,8 +144,14 @@ class ScraperThread(QThread):
     async def _get_clock_in(self, page) -> str:
         await page.goto(WORK_URL, timeout=30_000)
         await page.wait_for_load_state("networkidle", timeout=20_000)
-        # SPA 렌더링 대기
-        await page.wait_for_timeout(3_000)
+        # '오늘 근무현황' 섹션이 렌더링될 때까지 대기 (최대 10초)
+        try:
+            await page.wait_for_function(
+                "() => /[012]\\d:[0-5]\\d출근/.test(document.body.innerText)",
+                timeout=10_000,
+            )
+        except Exception:
+            pass  # 출근 전일 수 있으므로 그대로 파싱 시도
 
         result = await page.evaluate(_JS_FIND_CLOCK_IN)
         if result:
