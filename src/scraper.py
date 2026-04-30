@@ -46,14 +46,28 @@ _JS_FIND_CLOCK_IN = """
 """
 
 
+STEPS = [
+    "브라우저 시작",   # 1/5
+    "로그인 페이지",   # 2/5
+    "로그인 중",       # 3/5
+    "근무 페이지",     # 4/5
+    "시간 파싱",       # 5/5
+]
+TOTAL = len(STEPS)
+
+
 class ScraperThread(QThread):
-    success = pyqtSignal(str)   # 출근 시간 'HH:MM'
-    failure = pyqtSignal(str)   # 에러 메시지
+    success  = pyqtSignal(str)       # 출근 시간 'HH:MM'
+    failure  = pyqtSignal(str)       # 에러 메시지
+    progress = pyqtSignal(int, str)  # (현재 단계 1~5, 단계명)
 
     def __init__(self, username: str, password: str, parent=None):
         super().__init__(parent)
         self.username = username
         self.password = password
+
+    def _step(self, n: int):
+        self.progress.emit(n, STEPS[n - 1])
 
     def run(self):
         try:
@@ -63,6 +77,7 @@ class ScraperThread(QThread):
             self.failure.emit(str(e))
 
     async def _scrape(self) -> str:
+        self._step(1)
         async with async_playwright() as p:
             browser = await self._launch_browser(p)
             page = await browser.new_page()
@@ -72,8 +87,7 @@ class ScraperThread(QThread):
             finally:
                 await browser.close()
 
-    @staticmethod
-    async def _launch_browser(p):
+    async def _launch_browser(self, p):
         # Windows 10/11에 기본 설치된 Edge 우선 사용 → Chrome → 내장 Chromium
         for channel in ("msedge", "chrome"):
             try:
@@ -84,6 +98,7 @@ class ScraperThread(QThread):
         return await p.chromium.launch(headless=True)
 
     async def _login(self, page):
+        self._step(2)
         await page.goto(LOGIN_URL, timeout=30_000)
         # networkidle 대신 아이디 입력 필드가 보이는 즉시 진행
         await page.wait_for_selector('input[placeholder*="ID"]', timeout=10_000)
@@ -127,6 +142,7 @@ class ScraperThread(QThread):
         await pw_field.type(self.password, delay=50)  # 실제 키 입력으로 React 이벤트 트리거
         await page.wait_for_timeout(300)
 
+        self._step(3)
         # Playwright locator로 버튼 클릭 (마우스 이벤트 전체 시뮬레이션)
         login_btn = page.locator('button[type="submit"]').first
         await login_btn.wait_for(state="visible", timeout=5_000)
@@ -142,6 +158,7 @@ class ScraperThread(QThread):
             raise RuntimeError("로그인 실패: 아이디 또는 비밀번호를 확인하세요.")
 
     async def _get_clock_in(self, page) -> str:
+        self._step(4)
         await page.goto(WORK_URL, timeout=30_000)
         await page.wait_for_load_state("networkidle", timeout=20_000)
         # '오늘 근무현황' 섹션이 렌더링될 때까지 대기 (최대 10초)
@@ -153,6 +170,7 @@ class ScraperThread(QThread):
         except Exception:
             pass  # 출근 전일 수 있으므로 그대로 파싱 시도
 
+        self._step(5)
         result = await page.evaluate(_JS_FIND_CLOCK_IN)
         if result:
             return result

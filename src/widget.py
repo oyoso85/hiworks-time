@@ -28,6 +28,7 @@ class DesktopWidget(QWidget):
         self._clock_in: str | None = None
         self._status = "idle"   # idle | no_creds | loading | ok | error
         self._error_msg = ""
+        self._progress = (0, "")  # (현재 단계, 단계명)
         self._drag_pos: QPoint | None = None
         self._thread: ScraperThread | None = None
 
@@ -66,6 +67,7 @@ class DesktopWidget(QWidget):
         self._thread = ScraperThread(username, password, self)
         self._thread.success.connect(self._on_success)
         self._thread.failure.connect(self._on_failure)
+        self._thread.progress.connect(self._on_progress)
         self._thread.start()
 
     def _on_success(self, clock_in: str):
@@ -76,6 +78,10 @@ class DesktopWidget(QWidget):
     def _on_failure(self, msg: str):
         self._status = "error"
         self._error_msg = msg
+        self.update()
+
+    def _on_progress(self, step: int, name: str):
+        self._progress = (step, name)
         self.update()
 
     def _start_auto_refresh(self):
@@ -106,7 +112,7 @@ class DesktopWidget(QWidget):
         if self._status == "no_creds":
             self._draw_login_button(p)
         elif self._status == "loading":
-            self._draw_times(p, "…", "…")
+            self._draw_progress(p)
         elif self._status == "error":
             self._draw_error(p)
         elif self._status == "ok" and self._clock_in:
@@ -142,6 +148,30 @@ class DesktopWidget(QWidget):
             p.drawText(x + 1, y + 1, text)
             p.setPen(color)
             p.drawText(x, y, text)
+
+    def _draw_progress(self, p: QPainter):
+        from scraper import TOTAL
+        step, name = self._progress
+        step_str = f"{step}/{TOTAL}" if step else f"0/{TOTAL}"
+
+        # 위: 단계 번호
+        font_big = QFont("Segoe UI", 11, QFont.Bold)
+        p.setFont(font_big)
+        p.setPen(QColor(0, 0, 0, 150))
+        p.drawText(1, H // 2 - 1, step_str)
+        p.setPen(QColor(255, 220, 80))
+        p.drawText(0, H // 2 - 2, step_str)
+
+        # 아래: 단계명
+        font_sm = QFont("Segoe UI", 8)
+        p.setFont(font_sm)
+        fm2 = QFontMetrics(font_sm)
+        tw = fm2.horizontalAdvance(name)
+        x = (W - tw) // 2
+        p.setPen(QColor(0, 0, 0, 130))
+        p.drawText(x + 1, H // 2 + fm2.height(), name)
+        p.setPen(QColor(180, 180, 180))
+        p.drawText(x, H // 2 + fm2.height() - 1, name)
 
     def _draw_login_button(self, p: QPainter):
         mx, my, mw, mh = 8, 10, W - 16, H - 20
