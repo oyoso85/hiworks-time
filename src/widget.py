@@ -224,14 +224,18 @@ class DesktopWidget(QWidget):
         dt = self._clock_out_dt()
         if dt is None:
             return "?:??"
-        delta = dt - datetime.now()
+        delta = datetime.now() - dt          # 양수 = 초과, 음수 = 남음
         total_min = int(delta.total_seconds() // 60)
-        if total_min <= 0:
-            return "퇴근 가능"
-        h, m = divmod(total_min, 60)
-        if h > 0:
-            return f"{h}h {m:02d}m"
-        return f"{m}m"
+
+        if total_min < 0:                    # 아직 퇴근 전 → -표시
+            h, m = divmod(-total_min, 60)
+            if h > 0:
+                return f"-{h}h {m:02d}m"
+            return f"-{m}m"
+        else:                                # 퇴근 시간 초과 → +표시
+            total_min = min(total_min, 24 * 60)   # 최대 24시간 캡
+            h, m = divmod(total_min, 60)
+            return f"+{h}h {m:02d}m"
 
     def _open_login(self):
         dlg = LoginDialog(self)
