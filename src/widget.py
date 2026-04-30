@@ -94,6 +94,9 @@ class DesktopWidget(QWidget):
         p.setRenderHint(QPainter.Antialiasing)
         p.setRenderHint(QPainter.TextAntialiasing)
 
+        # 10% opacity 둥근 배경
+        self._draw_bg(p)
+
         if self._status == "no_creds":
             self._draw_login_button(p)
         elif self._status == "loading":
@@ -102,7 +105,11 @@ class DesktopWidget(QWidget):
             self._draw_error(p)
         elif self._status == "ok" and self._clock_in:
             self._draw_times(p, self._clock_in, self._clock_out())
-        # idle: 아무것도 그리지 않음 (완전 투명)
+
+    def _draw_bg(self, p: QPainter):
+        path = QPainterPath()
+        path.addRoundedRect(0, 0, W, H, 10, 10)
+        p.fillPath(path, QColor(0, 0, 0, 26))  # 검정 10% (255 * 0.1 ≈ 26)
 
     def _draw_times(self, p: QPainter, line1: str, line2: str):
         font = QFont("Segoe UI", 13, QFont.Bold)
