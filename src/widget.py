@@ -51,7 +51,7 @@ class DesktopWidget(QWidget):
 
     def _on_startup(self):
         creds = credentials.load()
-        if creds is None:
+        if creds is None or not creds[2]:  # 도메인 미설정도 no_creds 처리
             self._status = "no_creds"
             self.update()
         else:
@@ -59,12 +59,12 @@ class DesktopWidget(QWidget):
 
     # ── 데이터 수집 ───────────────────────────────────────────────────────────
 
-    def _fetch(self, username: str, password: str):
+    def _fetch(self, username: str, password: str, domain: str):
         if self._thread and self._thread.isRunning():
             return
         self._status = "loading"
         self.update()
-        self._thread = ScraperThread(username, password, self)
+        self._thread = ScraperThread(username, password, domain, self)
         self._thread.success.connect(self._on_success)
         self._thread.failure.connect(self._on_failure)
         self._thread.progress.connect(self._on_progress)
@@ -96,7 +96,7 @@ class DesktopWidget(QWidget):
 
     def _refresh(self):
         creds = credentials.load()
-        if creds:
+        if creds and creds[2]:
             self._fetch(*creds)
 
     # ── 렌더링 ────────────────────────────────────────────────────────────────
@@ -154,13 +154,16 @@ class DesktopWidget(QWidget):
         step, name = self._progress
         step_str = f"{step}/{TOTAL}" if step else f"0/{TOTAL}"
 
-        # 위: 단계 번호
+        # 위: 단계 번호 (가운데 정렬)
         font_big = QFont("Segoe UI", 11, QFont.Bold)
         p.setFont(font_big)
+        fm = QFontMetrics(font_big)
+        tw_big = fm.horizontalAdvance(step_str)
+        x_big = (W - tw_big) // 2
         p.setPen(QColor(0, 0, 0, 150))
-        p.drawText(1, H // 2 - 1, step_str)
+        p.drawText(x_big + 1, H // 2 - 1, step_str)
         p.setPen(QColor(255, 220, 80))
-        p.drawText(0, H // 2 - 2, step_str)
+        p.drawText(x_big, H // 2 - 2, step_str)
 
         # 아래: 단계명
         font_sm = QFont("Segoe UI", 8)

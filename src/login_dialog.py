@@ -20,6 +20,11 @@ class LoginDialog(QDialog):
         layout.setSpacing(8)
         layout.setContentsMargins(16, 16, 16, 16)
 
+        layout.addWidget(QLabel("회사 도메인"))
+        self._domain_edit = QLineEdit()
+        self._domain_edit.setPlaceholderText("예: mycompany.com")
+        layout.addWidget(self._domain_edit)
+
         layout.addWidget(QLabel("아이디 (사원번호 또는 이메일)"))
         self._id_edit = QLineEdit()
         self._id_edit.setPlaceholderText("예: hong.gildong")
@@ -57,15 +62,17 @@ class LoginDialog(QDialog):
         creds = credentials.load()
         if creds:
             self._id_edit.setText(creds[0])
+            self._domain_edit.setText(creds[2])
             self._pw_edit.setFocus()
         else:
-            self._id_edit.setFocus()
+            self._domain_edit.setFocus()
 
     def _save(self):
+        domain = self._domain_edit.text().strip()
         uid = self._id_edit.text().strip()
         pw = self._pw_edit.text()
-        if not uid or not pw:
-            QMessageBox.warning(self, "입력 오류", "아이디와 비밀번호를 모두 입력해주세요.")
+        if not domain or not uid or not pw:
+            QMessageBox.warning(self, "입력 오류", "회사 도메인, 아이디, 비밀번호를 모두 입력해주세요.")
             return
-        credentials.save(uid, pw)
+        credentials.save(uid, pw, domain)
         self.accept()

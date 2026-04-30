@@ -1,8 +1,8 @@
 @echo off
 cd /d "%~dp0"
 
-:: venv Python 우선, 없으면 시스템 Python 사용
-set VENV_PY=D:\axgate\study\toktok-drawing\.venv\Scripts\python.exe
+:: 로컬 venv 우선, 없으면 시스템 Python 사용
+set VENV_PY=%~dp0.venv\Scripts\python.exe
 if exist "%VENV_PY%" (
     set PYTHON=%VENV_PY%
 ) else (
